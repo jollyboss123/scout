@@ -2,7 +2,7 @@ import os
 import time
 import duckdb
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, Body
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -44,8 +44,20 @@ def create_app(settings: Settings) -> FastAPI:
     def get_db(request: Request) -> duckdb.DuckDBPyConnection:
         return request.app.state.db
 
-    @app.post("/v1/geocode/forward", response_model=ForwardResp)
-    def forward(req: ForwardReq, con: duckdb.DuckDBPyConnection = Depends(get_db)):
+    @app.post("/v1/geocode/forward", response_model=ForwardResp,
+              summary="Name → lat/lon", tags=["geocoding"])
+    def forward(
+            req: ForwardReq = Body(
+                openapi_examples={
+                    "basic": {
+                        "summary": "KL by country",
+                        "value": {"candidates":[{"text":"Monograph Dining"}],
+                                  "country":"my","limit":3}
+                    }
+                }
+            ),
+            con: duckdb.DuckDBPyConnection = Depends(get_db),
+    ):
         t0 = time.time()
         toks: list[str] = []
         for c in (req.candidates or []):

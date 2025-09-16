@@ -1,7 +1,7 @@
 <img src="images/duck-scout.png" alt="Scout logo — duck with binoculars" width="300">
 
 # Scout
-A lightweight, on-demand forward geocoder for OSM data—name in, lat/lon out—that can replace self-hosted Nominatim for many use cases and cut cold-start from ~30 min to ~1 min on typical regional datasets.
+A lightweight, on-demand forward geocoder for OSM data—name in, lat/lon out—that can replace self-hosted Nominatim for many use cases and cut cold-start from ~30 min to ~1 min on typical regional datasets. (Numbers are from my machine—YMMV.)
 
 | Aspect                        | This project                            | Self-hosted Nominatim                                      | Paid SaaS (typical) |
 |------------------------------|------------------------------------------|-------------------------------------------------------------|---------------------|
@@ -28,4 +28,5 @@ make run
 * Swagger UI: http://localhost:8000/docs
 * OpenAPI JSON: http://localhost:8000/openapi.json
 
-Note: Data from OSM; please attribute appropriately. Numbers are from my machine—YMMV.
+## Attribution
+The free [OpenStreetMap](https://www.openstreetmap.org/) data, which is used for the development of Scout, is licensed under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/) (ODbL) by the [OpenStreetMap Foundation](https://osmfoundation.org/) (OSMF).
