@@ -27,3 +27,5 @@ make run
 * API base URL: http://localhost:8000
 * Swagger UI: http://localhost:8000/docs
 * OpenAPI JSON: http://localhost:8000/openapi.json
+
+Note: Data from OSM; please attribute appropriately. Numbers are from my machine—YMMV.
