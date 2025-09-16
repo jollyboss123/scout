@@ -1,0 +1,23 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-lint:
+    runs-on: ubuntu-latest
+    env:
+      CONFIG: config.test.toml
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install deps
+        run: make install-dev
+
+      - name: Lint
+        run: make lint-fix
