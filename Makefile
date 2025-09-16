@@ -10,6 +10,9 @@ PORT     ?= 8000
 install:
 	$(UV) sync
 
+install-dev:
+	$(UV) sync --all-extras --dev
+
 # Build the DuckDB gazetteer using settings from config.toml
 build-gaz: | install
 	SCOUT_CONFIG="$(CONFIG)" $(UV) run -- python -m scripts.build_gazetteer --config "$(CONFIG)"
@@ -25,8 +28,12 @@ run-prod: | install
 test: | install
 	$(UV) run -- pytest -q
 
-lint: | install
+lint: | install-dev
 	$(UV) run -- ruff check .
+
+lint-fix: | install-dev
+	$(UV) run -- ruff check --fix .
+	$(UV) run -- ruff format .
 
 # Update lock file (pin versions)
 lock:

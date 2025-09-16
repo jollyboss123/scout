@@ -1,4 +1,6 @@
-import os, time, duckdb
+import os
+import time
+import duckdb
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request
 from pydantic import BaseModel
