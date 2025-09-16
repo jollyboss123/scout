@@ -7,8 +7,8 @@ from pathlib import Path
 
 import duckdb
 
-DEFAULT_PBF   = "https://download.geofabrik.de/asia/malaysia-singapore-brunei-latest.osm.pbf"
-DEFAULT_OUT   = "data/gazetteer.duckdb"
+from settings import load_settings
+
 DEFAULT_TABLE = "raw_osm"
 SCHEMA_VERSION = "1.0.0"  # bump on breaking schema changes
 
@@ -84,10 +84,11 @@ def record_build_meta(
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pbf", default=DEFAULT_PBF, help="PBF URL or local path")
-    ap.add_argument("--out", default=DEFAULT_OUT, help="DuckDB file to write")
+    ap.add_argument("--config", default=os.getenv("SCOUT_CONFIG", "config.toml"))
+    ap.add_argument("--pbf", default=None, help="Override PBF URL/path")
+    ap.add_argument("--out", default=None, help="Override DuckDB path")
+    ap.add_argument("--overwrite", action="store_true", help="Force rebuild")
     ap.add_argument("--table", default=DEFAULT_TABLE, help="Raw table name in DuckDB")
-    ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--filter-file", help="Optional JSON tags filter for QuackOSM (see docs)")
     ap.add_argument("--bbox", help="Optional bbox filter: minx,miny,maxx,maxy")
     ap.add_argument("--geocode", help='Optional geometry filter via text, e.g. "Kuala Lumpur, Malaysia"')
@@ -95,13 +96,22 @@ def main():
     ap.add_argument("--migrations-dir", default="sql/migrations", help="Path to migrations dir")
     args = ap.parse_args()
 
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    if os.path.exists(args.out) and not args.overwrite:
-        print(f"[build] {args.out} already exists. Use --overwrite to rebuild.", file=sys.stderr)
+    s = load_settings(args.config)
+    pbf = args.pbf or s.pbf_url
+    out = args.out or s.db_path
+    overwrite = args.overwrite or s.build_overwrite
+
+    if not pbf:
+        print("Error: PBF URL/path not set (config.data.pbf_url or --pbf).", file=sys.stderr)
+        sys.exit(2)
+
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    if os.path.exists(out) and not overwrite:
+        print(f"[build] {out} already exists. Use --overwrite to rebuild.", file=sys.stderr)
         sys.exit(0)
 
     # 1) quackosm → DuckDB raw table
-    cmd = ["quackosm", args.pbf, "--duckdb", "--output", args.out,
+    cmd = ["quackosm", pbf, "--duckdb", "--output", out,
            "--duckdb-table-name", args.table, "--no-sort"]
     if args.filter_file:
         cmd += ["--osm-tags-filter-file", args.filter_file]
@@ -118,7 +128,7 @@ def main():
 
     # 2) open DB, run migrations using dynamic macros
     print("[build] materializing gazetteer")
-    con = duckdb.connect(args.out)
+    con = duckdb.connect(out)
 
     # Make base schema & canon macro available first
     init_sql = Path(args.migrations_dir, "000_init.sql").read_text(encoding="utf-8")
@@ -128,10 +138,10 @@ def main():
     apply_migrations(con, args.migrations_dir, args.table)
 
     # 3) metadata
-    record_build_meta(con, args.pbf, cmd, SCHEMA_VERSION, args.out)
+    record_build_meta(con, pbf, cmd, SCHEMA_VERSION, out)
 
     con.close()
-    print("[build] done:", args.out)
+    print("[build] done:", out)
 
 if __name__ == "__main__":
     main()

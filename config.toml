@@ -1,0 +1,23 @@
+[server]
+host = "0.0.0.0"
+port = 8000
+
+[data]
+db_path = "data/gazetteer.duckdb"
+pbf_url = "https://download.geofabrik.de/asia/malaysia-singapore-brunei-latest.osm.pbf"
+
+[build]
+overwrite = true
+
+[ranking.weights]
+similarity = 0.60
+type       = 0.25
+importance = 0.15
+proximity  = 0.15
+proximity_km = 25
+
+[ranking.type_boost]
+"tourism:" = 0.80
+"amenity:" = 0.70
+"shop:"    = 0.60
+"default"  = 0.40
