@@ -1,16 +1,19 @@
 import os
 import time
+from typing import Optional, List, Generator
+
 import duckdb
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, Request, Body
+from fastapi import FastAPI, Depends, Body
 from pydantic import BaseModel
-from typing import Optional, List
 
-from settings import load_settings, Settings
-from repo import resolve_area_bbox, fetch_candidates
 from ranking import tokens, score_rows
+from repo import resolve_area_bbox, fetch_candidates
+from settings import load_settings, Settings
 
-class ForwardCandidate(BaseModel): text: str
+
+class ForwardCandidate(BaseModel):
+    text: str
+
 class ForwardReq(BaseModel):
     candidates: List[ForwardCandidate]
     country: Optional[str] = None
@@ -22,27 +25,34 @@ class Hit(BaseModel):
     country: Optional[str] = None; state: Optional[str] = None; city: Optional[str] = None
     osm_id: int; kind: Optional[str] = None; score: float
 
-class ForwardResp(BaseModel): hits: List[Hit]
+class ForwardResp(BaseModel):
+    hits: List[Hit]
 
 def create_app(settings: Settings) -> FastAPI:
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    app = FastAPI(title="scout", version="1.0.0")
+
+    def get_db() -> Generator[duckdb.DuckDBPyConnection, None, None]:
         con = duckdb.connect(settings.db_path, read_only=True)
         try:
-            con.execute("INSTALL spatial; LOAD spatial;")
-        except Exception: pass
-        app.state.db = con
-        app.state.settings = settings
-        try:
-            yield
+            try:
+                con.execute("LOAD spatial;")
+            except duckdb.Error:
+                con.execute("INSTALL spatial; LOAD spatial;")
+            yield con
         finally:
-            try: con.close()
-            except Exception: pass
+            try:
+                con.close()
+            except Exception:
+                pass
 
-    app = FastAPI(title="scout", version="1.0.0", lifespan=lifespan)
-
-    def get_db(request: Request) -> duckdb.DuckDBPyConnection:
-        return request.app.state.db
+    @app.middleware("http")
+    async def add_server_timing(request, call_next):
+        t0 = time.perf_counter()
+        resp = await call_next(request)
+        dur_ms = (time.perf_counter() - t0) * 1000.0
+        resp.headers["Server-Timing"] = f"app;dur={dur_ms:.1f}"
+        resp.headers["X-Process-Time"] = f"{dur_ms:.1f}ms"
+        return resp
 
     @app.post("/v1/geocode/forward", response_model=ForwardResp,
               summary="Name → lat/lon", tags=["geocoding"])
@@ -50,28 +60,33 @@ def create_app(settings: Settings) -> FastAPI:
             req: ForwardReq = Body(
                 openapi_examples={
                     "basic": {
-                        "summary": "KL by country",
-                        "value": {"candidates":[{"text":"Monograph Dining"}],
-                                  "country":"my","limit":3}
+                        "summary": "Restaurant by country",
+                        "value": {
+                            "candidates":[{"text":"Monograph Dining"}],
+                            "country":"Malaysia",  # use full name if your bbox resolver expects names
+                            "limit":3
+                        }
                     }
                 }
             ),
             con: duckdb.DuckDBPyConnection = Depends(get_db),
     ):
-        t0 = time.time()
+        # build tokens
         toks: list[str] = []
         for c in (req.candidates or []):
             toks.extend(tokens(c.text or ""))
-        # de-dup preserving order
-        seen = set()
-        seen, name_tokens = set(), [t for t in toks if not (t in seen or seen.add(t))]
+
+        # de-dup while preserving order
+        seen: set[str] = set()
+        name_tokens = [t for t in toks if not (t in seen or seen.add(t))]
         if not name_tokens:
             return ForwardResp(hits=[])
 
+        # bbox + fetch
         bbox = resolve_area_bbox(con, req.city_hint, req.country)
         rows = fetch_candidates(con, name_tokens, bbox, limit_scan=10000)
 
-        settings = app.state.settings
+        # score using closed-over `settings` (no app.state.settings)
         cands_texts = [c.text for c in (req.candidates or [])]
         hits_raw = score_rows(
             cands_texts, rows, req.limit,
@@ -81,7 +96,8 @@ def create_app(settings: Settings) -> FastAPI:
         return ForwardResp(hits=[Hit(**h) for h in hits_raw])
 
     @app.get("/healthz")
-    def healthz(): return {"ok": True}
+    def healthz():
+        return {"ok": True}
 
     return app
 
