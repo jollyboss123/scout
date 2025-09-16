@@ -1,7 +1,4 @@
-<p align="center">
-  <img src="images/duck-scout.png" width="300"
-       alt="Scout logo — duck with binoculars">
-</p>
+<img src="images/duck-scout.png" alt="Scout logo — duck with binoculars" width="300">
 
 # Scout
 A lightweight, on-demand forward geocoder for OSM data—name in, lat/lon out—that can replace self-hosted Nominatim for many use cases and cut cold-start from ~30 min to ~1 min on typical regional datasets.
