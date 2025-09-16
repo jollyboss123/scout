@@ -1,0 +1,26 @@
+[project]
+name = "scout"
+version = "0.1.0"
+description = "Forward geocoding with quackOSM"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "duckdb>=1.3.2",
+    "quackosm>=0.16.2",
+    "quackosm[cli]>=0.16.2",
+    "rapidfuzz>=3.14.1"
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5",
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[tool.uv] # uv-specific settings are optional
+index-url = "https://pypi.org/simple"
