@@ -1,4 +1,4 @@
-<p style="text-align:center;margin:0">
+<p align="center">
   <img src="images/duck-scout.png" width="300"
        alt="Scout logo — duck with binoculars">
 </p>
