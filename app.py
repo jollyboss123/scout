@@ -14,19 +14,29 @@ from settings import load_settings, Settings
 class ForwardCandidate(BaseModel):
     text: str
 
+
 class ForwardReq(BaseModel):
     candidates: List[ForwardCandidate]
     country: Optional[str] = None
     city_hint: Optional[str] = None
     limit: int = 5
 
+
 class Hit(BaseModel):
-    name: str; lat: float; lon: float
-    country: Optional[str] = None; state: Optional[str] = None; city: Optional[str] = None
-    osm_id: int; kind: Optional[str] = None; score: float
+    name: str
+    lat: float
+    lon: float
+    country: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    osm_id: int
+    kind: Optional[str] = None
+    score: float
+
 
 class ForwardResp(BaseModel):
     hits: List[Hit]
+
 
 def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(title="scout", version="1.0.0")
@@ -54,26 +64,30 @@ def create_app(settings: Settings) -> FastAPI:
         resp.headers["X-Process-Time"] = f"{dur_ms:.1f}ms"
         return resp
 
-    @app.post("/v1/geocode/forward", response_model=ForwardResp,
-              summary="Name → lat/lon", tags=["geocoding"])
+    @app.post(
+        "/v1/geocode/forward",
+        response_model=ForwardResp,
+        summary="Name → lat/lon",
+        tags=["geocoding"],
+    )
     def forward(
-            req: ForwardReq = Body(
-                openapi_examples={
-                    "basic": {
-                        "summary": "Restaurant by country",
-                        "value": {
-                            "candidates":[{"text":"Monograph Dining"}],
-                            "country":"Malaysia",  # use full name if your bbox resolver expects names
-                            "limit":3
-                        }
-                    }
+        req: ForwardReq = Body(
+            openapi_examples={
+                "basic": {
+                    "summary": "Restaurant by country",
+                    "value": {
+                        "candidates": [{"text": "Monograph Dining"}],
+                        "country": "my",
+                        "limit": 3,
+                    },
                 }
-            ),
-            con: duckdb.DuckDBPyConnection = Depends(get_db),
+            }
+        ),
+        con: duckdb.DuckDBPyConnection = Depends(get_db),
     ):
         # build tokens
         toks: list[str] = []
-        for c in (req.candidates or []):
+        for c in req.candidates or []:
             toks.extend(tokens(c.text or ""))
 
         # de-dup while preserving order
@@ -89,9 +103,13 @@ def create_app(settings: Settings) -> FastAPI:
         # score using closed-over `settings` (no app.state.settings)
         cands_texts = [c.text for c in (req.candidates or [])]
         hits_raw = score_rows(
-            cands_texts, rows, req.limit,
-            settings.weights, settings.type_boost,
-            bbox=bbox, proximity_km=settings.proximity_km
+            cands_texts,
+            rows,
+            req.limit,
+            settings.weights,
+            settings.type_boost,
+            bbox=bbox,
+            proximity_km=settings.proximity_km,
         )
         return ForwardResp(hits=[Hit(**h) for h in hits_raw])
 
@@ -100,6 +118,7 @@ def create_app(settings: Settings) -> FastAPI:
         return {"ok": True}
 
     return app
+
 
 # entrypoint
 SCOUT_CONFIG = os.getenv("SCOUT_CONFIG", "config.toml")

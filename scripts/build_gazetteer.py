@@ -12,6 +12,7 @@ from settings import load_settings
 DEFAULT_TABLE = "raw_osm"
 SCHEMA_VERSION = "1.0.0"  # bump on breaking schema changes
 
+
 def ensure_meta_table(con: duckdb.DuckDBPyConnection):
     con.execute("""
                 CREATE TABLE IF NOT EXISTS gaz_meta(
@@ -20,28 +21,44 @@ def ensure_meta_table(con: duckdb.DuckDBPyConnection):
                 );
                 """)
 
-def render_sql_with_placeholders(sql_text: str, raw_cols: list[str], raw_table: str) -> str:
+
+def render_sql_with_placeholders(
+    sql_text: str, raw_cols: list[str], raw_table: str
+) -> str:
     has_name = any(c.lower() == "name" for c in raw_cols)
-    id_col   = next((c for c in raw_cols if c.lower() in ("id","osm_id")), None)
-    geom_col = next((c for c in raw_cols if c.lower() in ("geometry","geom","wkb_geometry","wkt")), None)
+    id_col = next((c for c in raw_cols if c.lower() in ("id", "osm_id")), None)
+    geom_col = next(
+        (
+            c
+            for c in raw_cols
+            if c.lower() in ("geometry", "geom", "wkb_geometry", "wkt")
+        ),
+        None,
+    )
     if not geom_col:
         raise RuntimeError("No geometry column found.")
 
-    NAME_ARG  = "name" if has_name else "CAST(NULL AS VARCHAR)"
-    ID_EXPR   = f"CAST({id_col} AS BIGINT)" if id_col else "ROW_NUMBER() OVER ()::BIGINT"
-    GEOM_EXPR = f"ST_GeomFromText({geom_col})" if geom_col.lower() == "wkt" else geom_col
+    NAME_ARG = "name" if has_name else "CAST(NULL AS VARCHAR)"
+    ID_EXPR = f"CAST({id_col} AS BIGINT)" if id_col else "ROW_NUMBER() OVER ()::BIGINT"
+    GEOM_EXPR = (
+        f"ST_GeomFromText({geom_col})" if geom_col.lower() == "wkt" else geom_col
+    )
 
     # Do the replacements
-    sql = (sql_text
-           .replace("{RAW_TABLE}", f'"{raw_table}"')
-           .replace("{NAME_ARG}", NAME_ARG)
-           .replace("{ID_EXPR}", ID_EXPR)
-           .replace("{GEOM_EXPR}", GEOM_EXPR))
+    sql = (
+        sql_text.replace("{RAW_TABLE}", f'"{raw_table}"')
+        .replace("{NAME_ARG}", NAME_ARG)
+        .replace("{ID_EXPR}", ID_EXPR)
+        .replace("{GEOM_EXPR}", GEOM_EXPR)
+    )
     return sql
+
 
 def apply_migrations(con: duckdb.DuckDBPyConnection, dir_path: str, raw_table: str):
     """Run ALL .sql files in lexical order every build."""
-    raw_cols = [r[1] for r in con.execute(f"PRAGMA table_info('{raw_table}')").fetchall()]
+    raw_cols = [
+        r[1] for r in con.execute(f"PRAGMA table_info('{raw_table}')").fetchall()
+    ]
     for f in sorted(Path(dir_path).glob("*.sql")):
         sql_text = f.read_text(encoding="utf-8")
         sql = render_sql_with_placeholders(sql_text, raw_cols, raw_table)
@@ -54,12 +71,13 @@ def apply_migrations(con: duckdb.DuckDBPyConnection, dir_path: str, raw_table: s
             con.execute("ROLLBACK")
             raise RuntimeError(f"Migration {f.name} failed: {e}") from e
 
+
 def record_build_meta(
-        con: duckdb.DuckDBPyConnection,
-        pbf: str,
-        quack_cmd: list[str],
-        schema_version: str,
-        artifact_path: str
+    con: duckdb.DuckDBPyConnection,
+    pbf: str,
+    quack_cmd: list[str],
+    schema_version: str,
+    artifact_path: str,
 ):
     ensure_meta_table(con)
     con.execute("BEGIN")
@@ -69,7 +87,8 @@ def record_build_meta(
                     WHERE key IN ('pbf','duckdb_version','quackosm_args','schema_version','built_at','artifact_path')
                     """)
         # version(), CURRENT_TIMESTAMP come from DuckDB
-        con.execute("""
+        con.execute(
+            """
                     INSERT INTO gaz_meta(key,value)
                     SELECT 'duckdb_version', version()
                     UNION ALL SELECT 'pbf', ?
@@ -77,10 +96,19 @@ def record_build_meta(
                     UNION ALL SELECT 'schema_version', ?
                     UNION ALL SELECT 'built_at', CAST(CURRENT_TIMESTAMP AS TEXT)
                     UNION ALL SELECT 'artifact_path', ?
-                    """, [pbf, " ".join(shlex.quote(x) for x in quack_cmd), schema_version, artifact_path])
+                    """,
+            [
+                pbf,
+                " ".join(shlex.quote(x) for x in quack_cmd),
+                schema_version,
+                artifact_path,
+            ],
+        )
         con.execute("COMMIT")
     except:
-        con.execute("ROLLBACK"); raise
+        con.execute("ROLLBACK")
+        raise
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -89,11 +117,22 @@ def main():
     ap.add_argument("--out", default=None, help="Override DuckDB path")
     ap.add_argument("--overwrite", action="store_true", help="Force rebuild")
     ap.add_argument("--table", default=DEFAULT_TABLE, help="Raw table name in DuckDB")
-    ap.add_argument("--filter-file", help="Optional JSON tags filter for QuackOSM (see docs)")
+    ap.add_argument(
+        "--filter-file", help="Optional JSON tags filter for QuackOSM (see docs)"
+    )
     ap.add_argument("--bbox", help="Optional bbox filter: minx,miny,maxx,maxy")
-    ap.add_argument("--geocode", help='Optional geometry filter via text, e.g. "Kuala Lumpur, Malaysia"')
-    ap.add_argument("--explode-tags", action="store_true", help="Explode tags to columns (instead of MAP)")
-    ap.add_argument("--migrations-dir", default="sql/migrations", help="Path to migrations dir")
+    ap.add_argument(
+        "--geocode",
+        help='Optional geometry filter via text, e.g. "Kuala Lumpur, Malaysia"',
+    )
+    ap.add_argument(
+        "--explode-tags",
+        action="store_true",
+        help="Explode tags to columns (instead of MAP)",
+    )
+    ap.add_argument(
+        "--migrations-dir", default="sql/migrations", help="Path to migrations dir"
+    )
     args = ap.parse_args()
 
     s = load_settings(args.config)
@@ -102,17 +141,31 @@ def main():
     overwrite = args.overwrite or s.build_overwrite
 
     if not pbf:
-        print("Error: PBF URL/path not set (config.data.pbf_url or --pbf).", file=sys.stderr)
+        print(
+            "Error: PBF URL/path not set (config.data.pbf_url or --pbf).",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if os.path.exists(out) and not overwrite:
-        print(f"[build] {out} already exists. Use --overwrite to rebuild.", file=sys.stderr)
+        print(
+            f"[build] {out} already exists. Use --overwrite to rebuild.",
+            file=sys.stderr,
+        )
         sys.exit(0)
 
     # 1) quackosm → DuckDB raw table
-    cmd = ["quackosm", pbf, "--duckdb", "--output", out,
-           "--duckdb-table-name", args.table, "--no-sort"]
+    cmd = [
+        "quackosm",
+        pbf,
+        "--duckdb",
+        "--output",
+        out,
+        "--duckdb-table-name",
+        args.table,
+        "--no-sort",
+    ]
     if args.filter_file:
         cmd += ["--osm-tags-filter-file", args.filter_file]
         cmd += ["--explode-tags"] if args.explode_tags else ["--compact-tags"]
@@ -142,6 +195,7 @@ def main():
 
     con.close()
     print("[build] done:", out)
+
 
 if __name__ == "__main__":
     main()

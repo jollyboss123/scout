@@ -32,8 +32,9 @@ lint: | install-dev
 	$(UV) run -- ruff check .
 
 lint-fix: | install-dev
-	$(UV) run -- ruff check --fix .
-	$(UV) run -- ruff format .
+	$(UV) run -- ruff check --fix --exit-zero .
+	$(UV) run -- ruff format . || true
+	-$(UV) run -- ruff check .
 
 # Update lock file (pin versions)
 lock:
