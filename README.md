@@ -11,3 +11,19 @@ A lightweight, on-demand forward geocoder for OSM data—name in, lat/lon out—
 | Ops                          | Simple container or process              | DB tuning, updates, backups                                 | Vendor-managed      |
 | Use case fit                 | **Forward geocoding by name**            | Full geocoding stack (forward + reverse + addresses)        | Varies, $$$         |
 
+## Run it locally (via Makefile)
+
+Prereq: uv installed.
+```bash
+# 1) Create the virtualenv and install deps from pyproject.toml
+make install
+
+# 2) Build the gazetteer DuckDB from the PBF in config.toml
+make build-gaz
+
+# 3) Start the API (dev, auto-reload)
+make run
+```
+* API base URL: http://localhost:8000
+* Swagger UI: http://localhost:8000/docs
+* OpenAPI JSON: http://localhost:8000/openapi.json
